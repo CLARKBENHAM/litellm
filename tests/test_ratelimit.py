@@ -28,13 +28,13 @@ class RouterConfig(BaseModel):
 
 @pytest.fixture(scope="function")
 def router_factory():
-    def create_router(rpm, tpm):
+    def create_router(rpm, tpm, routing_strategy):
         model_list = base_model_list.copy()
         model_list[0]["rpm"] = rpm
         model_list[0]["tpm"] = tpm
         return Router(
             model_list=model_list,
-            routing_strategy="usage-based-routing",
+            routing_strategy=routing_strategy,
             debug_level="DEBUG",
         )
 
@@ -78,19 +78,32 @@ class ExpectNoException(Exception):
     ],
 )
 @pytest.mark.parametrize("sync_mode", [True, False])  # Use parametrization for sync/async
-def test_rate_limit(router_factory, num_messages, num_rate_limits, sync_mode):
+@pytest.mark.parametrize(
+    "routing_strategy",
+    [
+        "usage-based-routing",
+        "simple-shuffle",
+        "least-busy",
+        "latency-based-routing",
+    ],
+)
+def test_rate_limit(router_factory, num_messages, num_rate_limits, sync_mode, routing_strategy):
     expected_exception = ExpectNoException if num_messages <= num_rate_limits else ValueError
 
     list_of_messages = generate_list_of_messages(max(num_messages, num_rate_limits))
     rpm, tpm = calculate_limits(list_of_messages[:num_rate_limits])
     list_of_messages = list_of_messages[:num_messages]
-    router = router_factory(rpm, tpm)
+    router = router_factory(rpm, tpm, routing_strategy)
 
     with pytest.raises(expected_exception) as excinfo:
         if sync_mode:
             results = sync_call(router, list_of_messages)
         else:
             results = asyncio.run(async_call(router, list_of_messages))
+            if len([i for i in results if i is not None]) != num_messages:
+                raise ValueError(
+                    "No deployments available for selected model"
+                )  # not all results got returned
         raise ExpectNoException
 
     if expected_exception is not ExpectNoException:
