@@ -6,6 +6,12 @@ import random
 from typing import Any
 
 from pydantic import BaseModel
+import sys
+
+sys.path.insert(
+    0, os.path.abspath("..")
+)  # Adds the parent directory to the system path
+print(sys.path)
 from litellm import utils, Router
 
 COMPLETION_TOKENS = 5
@@ -36,6 +42,7 @@ def router_factory():
             model_list=model_list,
             routing_strategy=routing_strategy,
             debug_level="DEBUG",
+            enable_pre_call_checks=True,
         )
 
     return create_router
@@ -97,7 +104,7 @@ class ExpectNoException(Exception):
         "usage-based-routing",
         # "simple-shuffle", # dont expect to rate limit
         # "least-busy", # dont expect to rate limit
-        # "latency-based-routing",
+        "latency-based-routing",
     ],
 )
 def test_rate_limit(
